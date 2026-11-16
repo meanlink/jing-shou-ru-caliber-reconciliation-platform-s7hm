@@ -4,6 +4,7 @@ from src.config.database import Session
 from migrations.initial import migrate
 from src.models import User, Dataset, Job, Report, Delivery, Audit
 from src.services.business import metadata, seed_records, analyze
+from src.services.channels import ingest_dataset_entries
 from src.services.reports import deliver
 from src.utils.security import hash_password
 from src.utils.serialization import checksum
@@ -21,6 +22,8 @@ def seed():
             rows=seed_records()
             d=Dataset(name=m['dataset_name'],source=m['short']+'-202611.csv',records=rows,checksum=checksum(rows),created_at=time.time())
             db.add(d); db.flush()
+        # 接账：建立渠道主档与按账日别名，原名保留，歧义进入待认领
+        ingest_dataset_entries(db, d, actor='seed')
         if not db.scalar(select(Job).where(Job.name=='基线复核 · '+m['name'])):
             params={p['key']:p['default'] for p in m.get('parameters',[])}
             result=analyze(d.records,params)

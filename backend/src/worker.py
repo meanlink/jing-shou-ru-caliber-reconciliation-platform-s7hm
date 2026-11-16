@@ -6,6 +6,7 @@ from src.config.database import Session
 from src.config.settings import REDIS_URL
 from src.models import Job, Dataset, Report
 from src.services.business import analyze
+from src.services.channels import resolved_records_for_dataset
 from src.services.reports import deliver
 from src.services.audit import record
 logging.basicConfig(level=logging.INFO)
@@ -16,7 +17,11 @@ def execute(job_id):
         j.status='running'; db.commit()
         try:
             d=db.get(Dataset,j.dataset_id)
-            result=analyze(d.records,j.params)
+            # 未裁决（待认领）账不供分析；已接账批次按主档规范名口径计算，原名仍可追查
+            records=resolved_records_for_dataset(db,d.id)
+            if records is None:
+                records=d.records
+            result=analyze(records,j.params)
             json.dumps(result,allow_nan=False)
             j.result=result;j.status='completed';j.finished_at=time.time()
             record(db,'worker','job.completed',{'id':j.id})
